@@ -39,12 +39,22 @@ export default function Login() {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      alert('Selamat datang kembali di Ganesha Sport!');
-      navigate('/dashboard');
+      // ================= LOGIKA PENGALIHAN BERDASARKAN ROLE DATA BACKEND =================
+      const userRole = data.user?.role?.toLowerCase();
+
+      if (userRole === 'admin' || userRole === 'super admin' || data.user?.role === '1') {
+        alert('Selamat datang Admin Ganesha Arena!');
+        navigate('/admin/dashboard'); // Mengarah ke rute dashboard admin
+      } else {
+        alert('Selamat datang kembali di Ganesha Sport!');
+        navigate('/dashboard'); // Mengarah ke rute dashboard user biasa
+      }
+      // ===================================================================================
+
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      setLoading(false); // Memastikan tombol kembali aktif dan tidak macet
     }
   };
 
@@ -208,7 +218,7 @@ export default function Login() {
             {/* Link Pendaftaran Bawah */}
             <div className="mt-10 text-center">
               <p className="text-xs text-slate-500 tracking-wide">
-              Belum punya akun? <a href="/register" onClick={(e) => { e.preventDefault(); navigate('/register'); }} className="font-medium text-emerald-400 hover:text-emerald-300 transition">Daftar sekarang</a>
+                Belum punya akun? <a href="/register" onClick={(e) => { e.preventDefault(); navigate('/register'); }} className="font-medium text-emerald-400 hover:text-emerald-300 transition">Daftar sekarang</a>
               </p>
             </div>
 
