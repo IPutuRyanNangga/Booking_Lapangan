@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth; // <-- DIIMPORT UNTUK PROSES AUTENTIKASI LOGIN
 
 class UserController extends Controller
 {
@@ -36,6 +37,37 @@ class UserController extends Controller
             'message' => 'User berhasil didaftarkan',
             'data'    => $user
         ], 201);
+    }
+
+    /**
+     * ================= METHOD LOGIN BARU (SISTEM SANCTUM) =================
+     * Menghubungkan Form Login Frontend dengan Token Database
+     */
+    public function login(Request $request)
+    {
+        $validated = $request->validate([
+            'email'    => 'required|string|email',
+            'password' => 'required|string',
+        ]);
+
+        // Cocokkan data email dan password dengan tabel users di database
+        if (!Auth::attempt($validated)) {
+            return response()->json([
+                'message' => 'Email atau kata sandi yang Anda masukkan salah.'
+            ], 401);
+        }
+
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        
+        // Buat token akses baru via Laravel Sanctum
+        $token = $user->createToken('api_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Selamat datang kembali!',
+            'user'    => $user,
+            'token'   => $token
+        ], 200);
     }
 
     public function update(Request $request, string $id)

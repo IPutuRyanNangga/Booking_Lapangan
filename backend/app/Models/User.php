@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens; // <-- 1. IMPORT SANCTUM DI SINI
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    // 2. MASUKKAN HasApiTokens DI DALAM SINI BERSAMA TRAIT LAINNYA
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
@@ -30,6 +32,7 @@ class User extends Authenticatable
         ];
     }
 
+    // Relasi booking asli milikmu tetap aman di sini
     public function bookings()
     {
         return $this->hasMany(Booking::class);

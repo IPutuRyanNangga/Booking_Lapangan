@@ -14,8 +14,9 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 
-// ================= ROUTE REGISTER / REGISTRASI UMUM =================
+// ================= ROUTE REGISTER & LOGIN (UMUM / PUBLIK) =================
 Route::post('/users', [UserController::class, 'store']); // Siapa saja bisa daftar akun
+Route::post('/login', [UserController::class, 'login']); // Ditambahkan agar frontend bisa login
 
 
 // ================= ROUTE KHUSUS USER (CUSTOMER) ATAU ADMIN YANG SUDAH LOGIN =================
