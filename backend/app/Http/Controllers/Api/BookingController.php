@@ -11,14 +11,86 @@ class BookingController extends Controller
 {
     public function index()
     {
-        $bookings = Booking::with(['field', 'user'])->get();
+        // Mengambil booking dan memformat jam agar konsisten dengan React (H:i)
+        $bookings = Booking::with(['field', 'user'])->get()->map(function ($booking) {
+            $booking->jam_mulai = date('H:i', strtotime($booking->jam_mulai));
+            $booking->jam_selesai = date('H:i', strtotime($booking->jam_selesai));
+            return $booking;
+        });
+
         return response()->json($bookings, 200);
+    }
+
+    /**
+     * TAMBAHAN: Fungsi khusus untuk menangani checkout massal (multi-slot) dari React pembayaran.jsx
+     */
+    public function checkout(Request $request)
+    {
+        // 1. Validasi struktur data array yang dikirim dari frontend React
+        $request->validate([
+            'items'               => 'required|array|min:1',
+            'items.*.field_id'    => 'required|exists:fields,id',
+            'items.*.tanggal'     => 'required|date',
+            'items.*.jam_mulai'   => 'required|date_format:H:i',
+            'items.*.jam_selesai' => 'required|date_format:H:i',
+        ]);
+
+        $createdBookings = [];
+
+        // 2. Looping data keranjang untuk mengecek bentrok jadwal dan menyimpan pesanan
+        foreach ($request->items as $item) {
+            $fieldId = $item['field_id'];
+            $tanggal = $item['tanggal'];
+            $jamMulai = $item['jam_mulai'];
+            $jamSelesai = $item['jam_selesai'];
+
+            // 3. Proteksi ketat bentrokan jadwal di server
+            $isBentrok = Booking::where('field_id', $fieldId)
+                ->where('tanggal', $tanggal)
+                ->where(function ($query) use ($jamMulai, $jamSelesai) {
+                    $query->where(function ($q) use ($jamMulai, $jamSelesai) {
+                        $q->where('jam_mulai', '<', $jamSelesai)
+                          ->where('jam_selesai', '>', $jamMulai);
+                    });
+                })->exists();
+
+            if ($isBentrok) {
+                return response()->json([
+                    'message' => "Gagal memproses transaksi. Slot jam {$jamMulai} - {$jamSelesai} pada lapangan tersebut sudah dipesan orang lain."
+                ], 422);
+            }
+
+            // 4. Hitung Total Harga Otomatis per item
+            $field = Field::find($fieldId);
+            $mulai = strtotime($jamMulai);
+            $selesai = strtotime($jamSelesai);
+            $durasiJam = ($selesai - $mulai) / 3600;
+            $totalHarga = $durasiJam * $field->harga_per_jam;
+
+            // 5. Eksekusi penyimpanan data booking
+            $booking = Booking::create([
+                'user_id'     => $request->user()->id, 
+                'field_id'    => $fieldId,
+                'tanggal'     => $tanggal,
+                'jam_mulai'   => $jamMulai,
+                'jam_selesai' => $jamSelesai,
+                'total_harga' => $totalHarga,
+                'status'      => 'PENDING', 
+            ]);
+
+            $createdBookings[] = $booking->load('field');
+        }
+
+        return response()->json([
+            'message' => 'Semua checkout berhasil dibuat',
+            'data'    => $createdBookings
+        ], 201);
     }
 
     public function store(Request $request)
     {
+        // 1. Validasi Input mendasar
         $validated = $request->validate([
-            'user_id'         => 'required|exists:users,id',
             'field_id'        => 'required|exists:fields,id',
             'tanggal'         => 'required|date',
             'jam_mulai'       => 'required|date_format:H:i',
@@ -26,25 +98,49 @@ class BookingController extends Controller
             'status'          => 'required|string'
         ]);
 
-        $field = Field::find($request->field_id);
-        
-        $mulai = strtotime($request->jam_mulai);
-        $selesai = strtotime($request->jam_selesai);
-        $durasiJam = ($selesai - $mulai) / 3600;
+        $fieldId = $validated['field_id'];
+        $tanggal = $validated['tanggal'];
+        $jamMulai = $validated['jam_mulai'];
+        $jamSelesai = $validated['jam_selesai'];
 
+        // 2. VALIDASI BENTROKAN JADWAL
+        $isBentrok = Booking::where('field_id', $fieldId)
+            ->where('tanggal', $tanggal)
+            ->where(function ($query) use ($jamMulai, $jamSelesai) {
+                $query->where(function ($q) use ($jamMulai, $jamSelesai) {
+                    $q->where('jam_mulai', '<', $jamSelesai)
+                      ->where('jam_selesai', '>', $jamMulai);
+                });
+            })->exists();
+
+        if ($isBentrok) {
+            return response()->json([
+                'message' => 'Jadwal lapangan pada jam tersebut sudah dibooking orang lain.'
+            ], 422);
+        }
+
+        // 3. Hitung Total Harga Otomatis
+        $field = Field::find($fieldId);
+        $mulai = strtotime($jamMulai);
+        $selesai = strtotime($jamSelesai);
+        $durasiJam = ($selesai - $mulai) / 3600;
         $totalHarga = $durasiJam * $field->harga_per_jam;
 
+        // 4. Create Booking
         $booking = Booking::create([
-            'user_id'         => $validated['user_id'],
-            'field_id'        => $validated['field_id'],
-            'tanggal'         => $validated['tanggal'],
-            'jam_mulai'       => $validated['jam_mulai'],
-            'jam_selesai'     => $validated['jam_selesai'],
+            'user_id'         => $request->user()->id, 
+            'field_id'        => $fieldId,
+            'tanggal'         => $tanggal,
+            'jam_mulai'       => $jamMulai,
+            'jam_selesai'     => $jamSelesai,
             'total_harga'     => $totalHarga,
             'status'          => $validated['status'],
         ]);
 
-        return response()->json(['message' => 'Booking berhasil dibuat', 'data' => $booking->load(['field', 'user'])], 201);
+        return response()->json([
+            'message' => 'Booking berhasil dibuat', 
+            'data' => $booking->load(['field', 'user'])
+        ], 201);
     }
 
     public function show(string $id)
@@ -53,6 +149,10 @@ class BookingController extends Controller
         if (!$booking) {
             return response()->json(['message' => 'Data booking tidak ditemukan'], 404);
         }
+
+        $booking->jam_mulai = date('H:i', strtotime($booking->jam_mulai));
+        $booking->jam_selesai = date('H:i', strtotime($booking->jam_selesai));
+
         return response()->json($booking, 200);
     }
 
@@ -84,10 +184,21 @@ class BookingController extends Controller
             $booking->total_harga = $durasiJam * $field->harga_per_jam;
         }
 
-        $booking->update($validated);
+        // Simpan data string bersih setelah tipe data diubah menjadi VARCHAR
+        if ($request->has('status')) {
+            $booking->status = trim((string) $request->status);
+        }
+
+        unset($validated['status']);
+        $booking->fill($validated);
+        
+        $booking->save();
         $booking->refresh();
 
-        return response()->json(['message' => 'Booking berhasil diperbarui', 'data' => $booking->load(['field', 'user'])], 200);
+        return response()->json([
+            'message' => 'Booking berhasil diperbarui', 
+            'data' => $booking->load(['field', 'user'])
+        ], 200);
     }
 
     public function destroy(string $id)

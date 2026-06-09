@@ -30,6 +30,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/bookings', [BookingController::class, 'index']);   // Riwayat booking pribadi
     Route::post('/bookings', [BookingController::class, 'store']);  // Membuat booking lapangan baru
     Route::get('/bookings/{id}', [BookingController::class, 'show']); // Lihat detail 1 nota booking
+    
+    // TAMBAHAN: Route khusus untuk checkout massal (multi-slot) dari keranjang React
+    Route::post('/checkout', [BookingController::class, 'checkout']); 
 });
 
 

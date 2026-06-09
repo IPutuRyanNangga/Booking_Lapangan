@@ -4,88 +4,118 @@ import { useNavigate } from 'react-router-dom';
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [activeMenu, setActiveMenu] = useState('Overview');
+  const [filterDate, setFilterDate] = useState('');
+  const [courtType, setCourtType] = useState('Vinyl');
   
   // State Data Backend Admin
   const [adminInfo, setAdminInfo] = useState({ name: 'Admin Ganesha', role: 'Super Admin' });
   const [allBookings, setAllBookings] = useState([]);
   const [courts, setCourts] = useState([]);
   const [users, setUsers] = useState([]);
-  const [schedules, setSchedules] = useState([]);
   
   const [stats, setStats] = useState({ totalRevenue: 0, pendingApproval: 0, totalCourts: 0, totalUsers: 0 });
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem('token');
-  const API_BASE_URL = 'http://localhost:5173/admin'; // Endpoint base admin Anda
+  const API_BASE_URL = 'http://127.0.0.1:8000/api'; 
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+
+      const [fieldsRes, usersRes, bookingsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/fields`, {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch(`${API_BASE_URL}/users`, {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch(`${API_BASE_URL}/bookings`, {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ]);
+
+      const fieldsData = fieldsRes.ok ? await fieldsRes.json() : [];
+      const usersData = usersRes.ok ? await usersRes.json() : [];
+      
+      let bookingsData = [];
+      if (bookingsRes.ok) {
+        const rawBookings = await bookingsRes.json();
+        bookingsData = Array.isArray(rawBookings) ? rawBookings : rawBookings.data || [];
+      }
+
+      setCourts(fieldsData);
+      setUsers(usersData);
+      setAllBookings(bookingsData);
+
+      setStats({
+        totalRevenue: bookingsData.reduce(
+          (sum, booking) => sum + Number(booking.total_harga || 0),
+          0
+        ),
+        pendingApproval: bookingsData.filter(
+          (booking) => booking.status?.toLowerCase() === "pending"
+        ).length,
+        totalCourts: fieldsData.length,
+        totalUsers: usersData.length,
+      });
+
+      setAdminInfo({
+        name: "Administrator",
+        role: "Admin",
+      });
+    } catch (error) {
+      console.error("Gagal mengambil data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) {
-      navigate('/login');
+      navigate("/login");
       return;
     }
-
-    const fetchAllAdminData = async () => {
-      try {
-        setLoading(true);
-        // Ambil data statistik & pemesanan (Overview & Kelola Pemesanan)
-        const response = await fetch(`${API_BASE_URL}/dashboard`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setAllBookings(data.bookings || []);
-          setCourts(data.courts || [
-            { id: 1, name: 'Court A (Vinyl)', type: 'Vinyl Premium', price: 50000, status: 'Aktif' },
-            { id: 2, name: 'Court B (Parquet)', type: 'Wood Parquet', price: 60000, status: 'Aktif' },
-            { id: 3, name: 'Court C (Interlock)', type: 'Interlock Polypropylene', price: 45000, status: 'Perbaikan' },
-          ]);
-          setUsers(data.users || [
-            { id: 1, name: 'Ryan Nangga', email: 'ryan@undiksha.ac.id', role: 'Premium Member' },
-            { id: 2, name: 'Putu Aris', email: 'aris@gmail.com', role: 'User' }
-          ]);
-          setSchedules(data.schedules || [
-            { id: 101, court: 'Court A (Vinyl)', time: '08:00 - 09:00', status: 'Buka' },
-            { id: 102, court: 'Court A (Vinyl)', time: '09:00 - 10:00', status: 'Tutup' }
-          ]);
-
-          setStats({
-            totalRevenue: data.total_revenue || 1250000,
-            pendingApproval: data.pending_count || data.bookings?.filter(b => b.status === 'Pending').length || 1,
-            totalCourts: data.courts_count || 3,
-            totalUsers: data.users_count || 2
-          });
-          if (data.admin) setAdminInfo(data.admin);
-        } else if (response.status === 403) {
-          alert('Akses ditolak! Anda bukan admin.');
-          navigate('/dashboard');
-        }
-      } catch (error) {
-        console.error('Failed to fetch admin data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAllAdminData();
+    fetchData();
   }, [token, navigate]);
 
-  // Handler Aksi Pemesanan (Setujui / Tolak)
-  const handleApproveBooking = async (id) => {
+  // PERBAIKAN: Handler Status disesuaikan dengan nilai ENUM Database ('confirmed' / 'cancelled')
+  const handleUpdateStatusBooking = async (id, statusBaru) => {
+    const teksTampilan = statusBaru === 'confirmed' ? 'DISETUJUI' : 'DIBATALKAN';
+    const konfirmasi = window.confirm(`Apakah Anda yakin ingin merubah status transaksi #${id} menjadi [${teksTampilan}]?`);
+    if (!konfirmasi) return;
+
     try {
-      const response = await fetch(`${API_BASE_URL}/bookings/${id}/approve`, {
+      const response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ status: statusBaru }) 
       });
+
       if (response.ok) {
-        alert('Booking berhasil disetujui!');
-        setAllBookings(allBookings.map(b => b.id === id ? { ...b, status: 'Disetujui' } : b));
+        alert(`Transaksi #${id} berhasil diperbarui!`);
+        fetchData(); 
+      } else {
+        const err = await response.json();
+        alert(`Gagal memproses aksi: ${err.message || 'Kesalahan Server'}`);
       }
-    } catch (e) { alert('Aksi gagal.'); }
+    } catch (e) { 
+      console.error(e);
+      alert('Koneksi sistem terputus.'); 
+    }
   };
 
   const handleLogout = () => {
@@ -115,8 +145,7 @@ const AdminDashboard = () => {
           <nav className="space-y-1">
             {[
               { id: 'Overview', name: 'Overview', icon: '📊' },
-              { id: 'Lapangan', name: 'Kelola Lapangan', icon: '🏟️' },
-              { id: 'Jadwal', name: 'Kelola Jadwal', icon: '📅' },
+              { id: 'Lapangan', name: 'Kelola Lapangan', icon: '🏟️' }, 
               { id: 'Pemesanan', name: 'Kelola Pemesanan', icon: '📝' },
               { id: 'Pengguna', name: 'Kelola Pengguna', icon: '👥' }
             ].map((menu) => (
@@ -199,82 +228,56 @@ const AdminDashboard = () => {
           {activeMenu === 'Lapangan' && (
             <div className="bg-[#0b111e]/40 border border-slate-800/60 rounded-2xl shadow-xl overflow-hidden animate-fade-in">
               <div className="p-4 border-b border-slate-800/60 bg-slate-900/20 flex items-center justify-between">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Daftar Lapangan Ganesha Arena</h3>
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Daftar Lapangan Ganesha Arena
+                </h3>
                 <button
-  onClick={() => navigate('/admin/fields/create')}
-  className="bg-[#10b981] text-[#070b13] font-bold text-[10px] uppercase px-3 py-1.5 rounded-lg"
->
-  + Lapangan Baru
-</button>
+                  onClick={() => navigate('/admin/fields/create')}
+                  className="bg-[#10b981] text-[#070b13] font-bold text-[10px] uppercase px-3 py-1.5 rounded-lg"
+                >
+                  + Lapangan Baru
+                </button>
               </div>
+
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-950/40 border-b border-slate-800 text-[10px] font-bold uppercase text-slate-500">
                     <th className="p-4 pl-6">ID</th>
                     <th className="p-4">Nama Lapangan</th>
-                    <th className="p-4">Jenis Material</th>
+                    <th className="p-4">Jenis Olahraga</th>
                     <th className="p-4">Harga / Jam</th>
                     <th className="p-4">Status</th>
                     <th className="p-4 pr-6 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40 text-xs text-slate-300 font-medium">
-                  {courts.map(c => (
-                    <tr key={c.id} className="hover:bg-slate-900/10">
-                      <td className="p-4 pl-6 font-mono text-slate-500">{c.id}</td>
-                      <td className="p-4 text-white font-bold">{c.name}</td>
-                      <td className="p-4">{c.type}</td>
-                      <td className="p-4 font-mono text-[#10b981]">Rp {c.price.toLocaleString('id-ID')}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${c.status === 'Aktif' ? 'bg-emerald-950/40 text-[#10b981]' : 'bg-red-950/40 text-red-400'}`}>
-                          {c.status}
-                        </span>
-                      </td>
-                      <td className="p-4 pr-6 text-right space-x-2">
-                        <button className="text-cyan-400 hover:underline">Edit</button>
-                        <button className="text-red-400 hover:underline">Hapus</button>
+                  {courts.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="p-6 text-center text-slate-500">
+                        Belum ada data lapangan
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* ================= IF: KELOLA JADWAL ================= */}
-          {activeMenu === 'Jadwal' && (
-            <div className="bg-[#0b111e]/40 border border-slate-800/60 rounded-2xl shadow-xl overflow-hidden animate-fade-in">
-              <div className="p-4 border-b border-slate-800/60 bg-slate-900/20">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Konfigurasi Jam Operasional</h3>
-              </div>
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-950/40 border-b border-slate-800 text-[10px] font-bold uppercase text-slate-500">
-                    <th className="p-4 pl-6">ID Slot</th>
-                    <th className="p-4">Target Lapangan</th>
-                    <th className="p-4">Durasi Jam</th>
-                    <th className="p-4">Kondisi Slot</th>
-                    <th className="p-4 pr-6 text-right">Tindakan</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/40 text-xs text-slate-300 font-medium">
-                  {schedules.map(s => (
-                    <tr key={s.id} className="hover:bg-slate-900/10">
-                      <td className="p-4 pl-6 font-mono text-slate-500">{s.id}</td>
-                      <td className="p-4 font-bold text-white">{s.court}</td>
-                      <td className="p-4 font-mono">{s.time}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${s.status === 'Buka' ? 'bg-emerald-950/40 text-[#10b981]' : 'bg-red-950/40 text-red-400'}`}>
-                          {s.status === 'Buka' ? 'Buka (Public)' : 'Ditutup Admin'}
-                        </span>
-                      </td>
-                      <td className="p-4 pr-6 text-right">
-                        <button className="text-amber-400 font-bold hover:underline">
-                          {s.status === 'Buka' ? '🔒 Tutup Slot' : '🔓 Buka Slot'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  ) : (
+                    courts.map((c) => (
+                      <tr key={c.id} className="hover:bg-slate-900/10">
+                        <td className="p-4 pl-6 font-mono text-slate-500">{c.id}</td>
+                        <td className="p-4 text-white font-bold">{c.nama_lapangan}</td>
+                        <td className="p-4">{c.jenis_olahraga}</td>
+                        <td className="p-4 font-mono text-[#10b981]">
+                          Rp {Number(c.harga_per_jam || 0).toLocaleString('id-ID')}
+                        </td>
+                        <td className="p-4">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${c.status ? 'bg-emerald-950/40 text-[#10b981]' : 'bg-red-950/40 text-red-400'}`}>
+                            {c.status ? 'Aktif' : 'Nonaktif'}
+                          </span>
+                        </td>
+                        <td className="p-4 pr-6 text-right space-x-2">
+                          <button className="text-cyan-400 hover:underline">Edit</button>
+                          <button className="text-red-400 hover:underline">Hapus</button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -294,33 +297,61 @@ const AdminDashboard = () => {
                     <th className="p-4">Detail Booking</th>
                     <th className="p-4">Metode</th>
                     <th className="p-4">Status</th>
-                    <th className="p-4 pr-6 text-right">Verifikasi</th>
+                    <th className="p-4 pr-6 text-center">Verifikasi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40 text-xs text-slate-300 font-medium">
-                  {allBookings.map(b => (
-                    <tr key={b.id} className="hover:bg-slate-900/10">
-                      <td className="p-4 pl-6 font-mono font-bold text-white">{b.id || b.booking_code}</td>
-                      <td className="p-4 font-semibold">{b.user_name || b.user?.name || 'Customer'}</td>
-                      <td className="p-4">
-                        <span className="block font-bold">{b.tanggal || b.date}</span>
-                        <span className="text-[10px] text-slate-500">{b.lapangan || b.court_name} ({b.jam || b.time_slot})</span>
-                      </td>
-                      <td className="p-4 uppercase text-slate-400 font-mono font-bold">{b.payment_method || 'CASH'}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${b.status === 'Disetujui' || b.status === 'approved' ? 'bg-emerald-950/40 text-[#10b981]' : 'bg-amber-950/40 text-amber-400'}`}>
-                          {b.status}
-                        </span>
-                      </td>
-                      <td className="p-4 pr-6 text-right">
-                        {(b.status === 'Pending' || b.status === 'Menunggu Persetujuan') && (
-                          <button onClick={() => handleApproveBooking(b.id)} className="bg-[#10b981] text-[#070b13] font-bold text-[10px] uppercase px-2.5 py-1.5 rounded-lg">
-                            ✓ Approve
-                          </button>
-                        )}
-                      </td>
+                  {allBookings.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="p-6 text-center text-slate-500">Belum ada transaksi sewa lapangan.</td>
                     </tr>
-                  ))}
+                  ) : (
+                    allBookings.map(b => (
+                      <tr key={b.id} className="hover:bg-slate-900/10">
+                        <td className="p-4 pl-6 font-mono font-bold text-white">#{b.id}</td>
+                        <td className="p-4 font-semibold">{b.user?.name || b.user_name || 'Customer'}</td>
+                        <td className="p-4">
+                          <span className="block font-bold text-slate-300">{b.field?.nama_lapangan || b.court_name || 'Lapangan'}</span>
+                          <span className="text-[10px] text-slate-500">{b.tanggal} ({b.jam_mulai} - {b.jam_selesai})</span>
+                        </td>
+                        <td className="p-4 uppercase text-slate-400 font-mono font-bold">{b.payment_method || 'CASH'}</td>
+                        <td className="p-4">
+                          {/* PERBAIKAN: Mapping teks visual ENUM database ('confirmed'/'cancelled') agar di UI tetap muncul teks Indonesia */}
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            b.status?.toLowerCase() === 'confirmed' || b.status?.toLowerCase() === 'success' || b.status?.toLowerCase() === 'disetujui'
+                              ? 'bg-emerald-950/40 text-[#10b981]' 
+                              : b.status?.toLowerCase() === 'cancelled' || b.status?.toLowerCase() === 'dibatalkan' || b.status?.toLowerCase() === 'rejected'
+                              ? 'bg-red-950/40 text-red-400'
+                              : 'bg-amber-950/40 text-amber-400'
+                          }`}>
+                            {b.status?.toLowerCase() === 'confirmed' ? 'Disetujui' : b.status?.toLowerCase() === 'cancelled' ? 'Dibatalkan' : b.status}
+                          </span>
+                        </td>
+                        
+                        <td className="p-4 pr-6 text-center">
+                          {b.status?.toLowerCase() === 'pending' ? (
+                            <div className="flex items-center justify-center gap-2">
+                              {/* PERBAIKAN UTAMA: Mengirimkan kata kunci 'confirmed' & 'cancelled' sesuai list ENUM MySQL */}
+                              <button 
+                                onClick={() => handleUpdateStatusBooking(b.id, 'confirmed')} 
+                                className="bg-[#10b981] hover:bg-emerald-600 text-[#070b13] font-bold text-[10px] px-2.5 py-1 rounded-lg transition-all"
+                              >
+                                ✓ Setujui
+                              </button>
+                              <button 
+                                onClick={() => handleUpdateStatusBooking(b.id, 'cancelled')} 
+                                className="bg-red-950/40 hover:bg-red-900/40 text-red-400 border border-red-900/40 font-bold text-[10px] px-2.5 py-1 rounded-lg transition-all"
+                              >
+                                ✕ Tolak
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-600 font-semibold italic">Diverifikasi</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

@@ -14,8 +14,9 @@ const Pembayaran = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const API_BASE_URL = 'http://localhost:8000/api'; // Sesuaikan dengan URL backend Anda
-  const hargaPerJam = 50000;
-  const totalBayar = bookingItems.length * hargaPerJam;
+  
+  // PERBAIKAN: Menghitung total bayar secara dinamis berdasarkan harga asli tiap lapangan dari database
+  const totalBayar = bookingItems.reduce((sum, item) => sum + Number(item.harga || 0), 0);
 
   // Jika user iseng masuk ke /pembayaran tanpa memilih jadwal, kembalikan ke /jadwal
   if (bookingItems.length === 0) {
@@ -39,14 +40,14 @@ const Pembayaran = () => {
     try {
       setIsSubmitting(true);
 
-      // Siapkan payload data yang dikirim ke backend Laravel/Node.js Anda
+      // PERBAIKAN: Menyelaraskan payload dengan aturan array validasi 'items.*' di Laravel BookingController
       const payload = {
-        payment_method: paymentMethod,
-        total_amount: totalBayar,
-        slots: bookingItems.map(item => ({
-          date: item.tanggal,
-          court_name: item.lapangan,
-          time_slot: item.jam
+        payment_method: paymentMethod, // Bisa kamu gunakan nanti jika tabel booking sudah punya kolom method
+        items: bookingItems.map(item => ({
+          field_id: item.field_id,
+          tanggal: item.tanggal,
+          jam_mulai: item.jam_mulai,
+          jam_selesai: item.jam_selesai
         }))
       };
 
@@ -54,17 +55,19 @@ const Pembayaran = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json', // Proteksi agar error Laravel terbaca sebagai JSON, bukan HTML
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(payload)
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         alert('Booking Berhasil! Menunggu verifikasi pembayaran sistem Ganesha Arena.');
         navigate('/dashboard'); // Kembali ke dashboard setelah sukses
       } else {
-        const errData = await response.json();
-        alert(`Gagal membuat pesanan: ${errData.message || 'Terjadi kesalahan server.'}`);
+        alert(`Gagal membuat pesanan: ${data.message || 'Terjadi kesalahan server.'}`);
       }
     } catch (error) {
       console.error('Error saat melakukan checkout:', error);
@@ -111,10 +114,12 @@ const Pembayaran = () => {
               <div key={item.id} className={`flex justify-between items-center ${idx !== 0 ? 'pt-3' : ''}`}>
                 <div>
                   <h5 className="text-xs font-bold text-white uppercase tracking-wide">{item.lapangan}</h5>
-                  <p className="text-[11px] text-slate-400 font-semibold mt-0.5">{item.jam}</p>
+                  {/* PERBAIKAN: Menampilkan parameter jam_mulai dan jam_selesai yang dikirim dari keranjang */}
+                  <p className="text-[11px] text-slate-400 font-semibold mt-0.5">{item.jam_mulai} - {item.jam_selesai}</p>
                   <p className="text-[10px] text-slate-500 font-medium">Tanggal: {item.tanggal}</p>
                 </div>
-                <span className="font-mono text-xs text-[#10b981] font-bold">Rp {hargaPerJam.toLocaleString('id-ID')}</span>
+                {/* PERBAIKAN: Menampilkan harga asli per item sesuai data database */}
+                <span className="font-mono text-xs text-[#10b981] font-bold">Rp {Number(item.harga || 0).toLocaleString('id-ID')}</span>
               </div>
             ))}
           </div>
