@@ -1,0 +1,45 @@
+services:
+  backend:
+    image: php:8.2-cli
+    container_name: booking-backend
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    command: >
+      bash -c "
+      apt-get update &&
+      apt-get install -y git unzip libzip-dev zip &&
+      docker-php-ext-install pdo pdo_mysql &&
+      curl -sS https://getcomposer.org/installer | php &&
+      mv composer.phar /usr/local/bin/composer &&
+      composer install &&
+      cp .env.example .env &&
+      php artisan key:generate &&
+      php artisan serve --host=0.0.0.0 --port=8000
+      "
+
+  frontend:
+    image: node:20
+    container_name: booking-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    command: >
+      bash -c "
+      npm install &&
+      npm run dev -- --host
+      "
+
+  mysql:
+    image: mysql:8.0
+    container_name: booking-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: booking_lapangan
+    ports:
+      - "3306:3306"
