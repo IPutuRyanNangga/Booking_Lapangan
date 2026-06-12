@@ -6,25 +6,17 @@ const JadwalLapangan = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedCourt, setSelectedCourt] = useState('All');
   const [scheduleData, setScheduleData] = useState([]);
-  const [courts, setCourts] = useState([]); // State dinamis dari database
+  const [courts, setCourts] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState([]);
 
   const token = localStorage.getItem('token');
-  const API_BASE_URL = 'http://127.0.0.1:8000/api'; 
+  const API_BASE_URL = 'https://supreme-winner-v6p5v77jv9p5cw5qr-8000.app.github.dev/api'; 
+  
   const timeSlots = [
-    '08:00 - 09:00',
-    '09:00 - 10:00',
-    '10:00 - 11:00',
-    '11:00 - 12:00',
-    '13:00 - 14:00',
-    '14:00 - 15:00',
-    '15:00 - 16:00',
-    '16:00 - 17:00',
-    '17:00 - 18:00',
-    '18:00 - 19:00',
-    '19:00 - 20:00',
-    '20:00 - 21:00'
+    '08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00',
+    '13:00 - 14:00', '14:00 - 15:00', '15:00 - 16:00', '16:00 - 17:00',
+    '17:00 - 18:00', '18:00 - 19:00', '19:00 - 20:00', '20:00 - 21:00'
   ];
 
   useEffect(() => {
@@ -37,46 +29,34 @@ const JadwalLapangan = () => {
       try {
         setLoading(true);
     
-        // ==========================
-        // AMBIL DATA LAPANGAN
-        // ==========================
-        const courtsResponse = await fetch(
-          `${API_BASE_URL}/fields`,
-          {
-            headers: {
-              Accept: 'application/json',
-              Authorization: `Bearer ${token}`
-            }
+        // 1. FETCH DATA LAPANGAN (FIELDS)
+        const courtsResponse = await fetch(`${API_BASE_URL}/fields`, {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`
           }
-        );
+        });
     
         if (courtsResponse.ok) {
           const courtsData = await courtsResponse.json();
-          console.log('FIELDS:', courtsData);
           setCourts(courtsData);
         }
     
-        // ==========================
-        // AMBIL DATA BOOKING
-        // ==========================
-        const bookingsResponse = await fetch(
-          `${API_BASE_URL}/bookings`,
-          {
-            headers: {
-              Accept: 'application/json',
-              Authorization: `Bearer ${token}`
-            }
+        // 2. FETCH DATA BOOKING SPESIFIK BERDASARKAN TANGGAL YANG DIPILIH
+        const bookingsResponse = await fetch(`${API_BASE_URL}/bookings?tanggal=${selectedDate}`, {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`
           }
-        );
+        });
     
         if (bookingsResponse.ok) {
           const bookingsData = await bookingsResponse.json();
-          console.log('BOOKINGS:', bookingsData);
           setScheduleData(bookingsData);
         }
     
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
@@ -88,20 +68,16 @@ const JadwalLapangan = () => {
   const checkSlotStatus = (courtId, timeSlot) => {
     const [jamMulai] = timeSlot.split(' - ');
   
-    const isBooked = scheduleData.some((booking) => {
+    return scheduleData.some((booking) => {
       const sameDate = booking.tanggal === selectedDate;
       const sameCourt = booking.field_id === courtId;
-      const sameHour = booking.jam_mulai === jamMulai;
+      const sameHour = booking.jam_mulai === jamMulai || booking.jam_mulai === `${jamMulai}:00`;
   
       return sameDate && sameCourt && sameHour;
-    });
-  
-    return isBooked ? 'BOOKED' : 'AVAILABLE';
+    }) ? 'BOOKED' : 'AVAILABLE';
   };
 
-  // PERBAIKAN: Menyelaraskan susunan parameter fungsi agar menerima courtId
   const handleSlotClick = (courtId, courtName, timeSlot, courtPrice) => {
-    // PERBAIKAN: Menggunakan courtId agar konsisten dengan id tombol di JSX
     const slotId = `${selectedDate}-${courtId}-${timeSlot}`;
     const isAlreadyInCart = cart.some(item => item.id === slotId);
 
@@ -114,8 +90,8 @@ const JadwalLapangan = () => {
         id: slotId,
         field_id: courtId,
         tanggal: selectedDate,
-        jam_mulai: jamMulai,
-        jam_selesai: jamSelesai,
+        jam_mulai: `${jamMulai}:00`, // Format HH:mm:00 agar sinkron dengan MySQL
+        jam_selesai: `${jamSelesai}:00`,
         lapangan: courtName,
         harga: courtPrice || 0
       };
@@ -129,6 +105,7 @@ const JadwalLapangan = () => {
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
+    // Mengirimkan state dengan struktur 'items' agar serasi dengan skenario testing massal
     navigate('/pembayaran', { state: { items: cart } });
   };
 
@@ -240,7 +217,7 @@ const JadwalLapangan = () => {
 
         {/* SIDEBAR KERANJANG */}
         {cart.length > 0 && (
-          <div className="w-full lg:w-80 bg-[#0b111e]/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xl shrink-0 animate-fade-in">
+          <div className="w-full lg:w-80 bg-[#0b111e]/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xl shrink-0">
             <div className="flex flex-col flex-1 overflow-hidden">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">Antrean Booking ({cart.length})</h4>
@@ -251,7 +228,9 @@ const JadwalLapangan = () => {
                 {cart.map((item) => ( 
                   <div key={item.id} className="bg-[#05080f] border border-slate-800 p-3 rounded-xl relative group flex flex-col gap-1">
                     <p className="text-xs font-bold text-slate-200">{item.lapangan}</p>
-                    <p className="text-[11px] text-slate-400 font-mono">{item.jam_mulai} - {item.jam_selesai}</p>
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      {item.jam_mulai.substring(0,5)} - {item.jam_selesai.substring(0,5)}
+                    </p>
                     <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-900">
                       <span className="text-xs font-semibold text-[#10b981]">Rp {Number(item.harga).toLocaleString('id-ID')}</span>
                       <button 

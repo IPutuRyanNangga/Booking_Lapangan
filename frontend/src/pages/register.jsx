@@ -23,7 +23,7 @@ export default function Register() {
 
     try {
       // Menembak API store/register user milikmu di Laravel backend
-      const response = await fetch('http://127.0.0.1:8000/api/users', {
+      const response = await fetch('https://supreme-winner-v6p5v77jv9p5cw5qr-8000.app.github.dev/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

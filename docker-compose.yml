@@ -11,11 +11,10 @@ services:
       bash -c "
       apt-get update &&
       apt-get install -y git unzip libzip-dev zip &&
-      docker-php-ext-install pdo pdo_mysql &&
+      docker-php-ext-install pdo pdo_mysql sockets &&
       curl -sS https://getcomposer.org/installer | php &&
       mv composer.phar /usr/local/bin/composer &&
       composer install &&
-      cp .env.example .env &&
       php artisan key:generate &&
       php artisan serve --host=0.0.0.0 --port=8000
       "
@@ -43,3 +42,48 @@ services:
       MYSQL_DATABASE: booking_lapangan
     ports:
       - "3306:3306"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: booking-rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  # ================= NODE KANDIDAT WORKER 1 =================
+  worker-bali:
+    image: php:8.2-cli
+    container_name: booking-worker-bali
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - mysql
+      - rabbitmq
+    command: php artisan queue:work --queue=default
+
+  # ================= NODE KANDIDAT WORKER 2 =================
+  worker-ganesha:
+    image: php:8.2-cli
+    container_name: booking-worker-ganesha
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - mysql
+      - rabbitmq
+    command: php artisan queue:work --queue=default
+
+  # ================= SERVICE LOAD TESTING: LOCUST =================
+  locust:
+    image: locustio/locust
+    container_name: booking-locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./:/mnt/locust
+    command: -f /mnt/locust/locustfile.py

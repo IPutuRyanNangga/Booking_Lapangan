@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Field;
 use Illuminate\Http\Request;
+use App\Jobs\SendBookingApprovedEmailJob; // 1. IMPORT CLASS JOB RABBITMQ DI SINI
 
 class BookingController extends Controller
 {
@@ -158,7 +159,8 @@ class BookingController extends Controller
 
     public function update(Request $request, string $id)
     {
-        $booking = Booking::find($id);
+        // Mencari data booking beserta relasi usernya agar data email tersedia untuk dikirim
+        $booking = Booking::with('user')->find($id);
         if (!$booking) {
             return response()->json(['message' => 'Data booking tidak ditemukan'], 404);
         }
@@ -184,9 +186,18 @@ class BookingController extends Controller
             $booking->total_harga = $durasiJam * $field->harga_per_jam;
         }
 
-        // Simpan data string bersih setelah tipe data diubah menjadi VARCHAR
+        // Variabel penanda apakah status berubah menjadi disetujui
+        $shouldSendEmail = false;
+
         if ($request->has('status')) {
-            $booking->status = trim((string) $request->status);
+            $cleanedStatus = trim((string) $request->status);
+            $booking->status = $cleanedStatus;
+
+            // 2. LOGIKA CEK: Jika status diubah ke APPROVED atau SUCCESS, tandai untuk kirim email
+            $upperStatus = strtoupper($cleanedStatus);
+            if ($upperStatus === 'APPROVED' || $upperStatus === 'SUCCESS' || $upperStatus === 'CONFIRMED') {
+                $shouldSendEmail = true;
+            }
         }
 
         unset($validated['status']);
@@ -194,6 +205,11 @@ class BookingController extends Controller
         
         $booking->save();
         $booking->refresh();
+
+        // 3. PEMICU RABBITMQ: Kirim job ke antrean asinkron jika kriteria terpenuhi
+        if ($shouldSendEmail && $booking->user) {
+            SendBookingApprovedEmailJob::dispatch($booking);
+        }
 
         return response()->json([
             'message' => 'Booking berhasil diperbarui', 

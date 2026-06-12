@@ -14,7 +14,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem('token');
-  const API_BASE_URL = 'http://localhost:8000/api'; // Sesuaikan URL backend Anda
+  const API_BASE_URL = 'https://supreme-winner-v6p5v77jv9p5cw5qr-8000.app.github.dev/api'; // Sesuaikan URL backend Anda
 
   useEffect(() => {
     if (!token) {

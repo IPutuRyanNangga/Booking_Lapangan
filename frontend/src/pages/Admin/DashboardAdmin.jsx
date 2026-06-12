@@ -17,7 +17,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem('token');
-  const API_BASE_URL = 'http://127.0.0.1:8000/api'; 
+  const API_BASE_URL = 'https://supreme-winner-v6p5v77jv9p5cw5qr-8000.app.github.dev/api'; 
 
   const fetchData = async () => {
     try {

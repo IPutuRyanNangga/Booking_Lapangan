@@ -21,7 +21,8 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/login', {
+      // PERBAIKAN: Mengarahkan langsung ke rute API port 8000 backend Codespaces yang valid
+      const response = await fetch('https://supreme-winner-v6p5v77jv9p5cw5qr-8000.app.github.dev/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

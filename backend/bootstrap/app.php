@@ -12,10 +12,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Mendaftarkan alias middleware khusus Admin di Laravel 11
+        // 1. Mendaftarkan alias middleware khusus Admin di Laravel 11
         $middleware->alias([
             'admin' => \App\Http\Middleware\IsAdmin::class,
         ]);
+
+        // 2. Mengizinkan semua proxy luar menembak API di lingkungan Cloud Codespaces
+        $middleware->trustProxies(at: '*');
+
+        // 3. Memaksa Laravel menyisipkan sistem HandleCors bawaan ke dalam global middleware stack
+        $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

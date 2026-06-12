@@ -33,7 +33,7 @@ const AddField = () => {
       setLoading(true);
 
       const response = await fetch(
-        'http://127.0.0.1:8000/api/fields',
+        'https://supreme-winner-v6p5v77jv9p5cw5qr-8000.app.github.dev/api/fields',
         {
           method: 'POST',
           headers: {
