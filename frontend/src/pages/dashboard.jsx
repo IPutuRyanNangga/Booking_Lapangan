@@ -68,7 +68,8 @@ const Dashboard = () => {
 
       } catch (error) {
         console.error('Error:', error);
-        handleLogout();
+        // Di-komentari agar Anda tidak mental saat server sync di Codespaces
+        // handleLogout(); 
       } finally {
         setLoading(false);
       }
@@ -243,7 +244,6 @@ const Dashboard = () => {
           <div className="grid grid-cols-2 gap-4 shrink-0">
             <div className="bg-[#0b111e]/40 border border-slate-800/60 p-6 rounded-2xl shadow-lg flex flex-col justify-center items-center text-center">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Total Main</span>
-              {/* PERBAIKAN: Mengganti teks manual statis menjadi dinamis dari data server */}
               <span className="text-2xl font-extrabold text-white">{stats.totalMain} Sesi</span>
             </div>
             <div className="bg-[#0b111e]/40 border border-slate-800/60 p-6 rounded-2xl shadow-lg flex flex-col justify-center items-center text-center">
@@ -274,11 +274,9 @@ const Dashboard = () => {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs text-slate-400 font-bold">#{booking.id}</span>
-                        {/* PERBAIKAN: Menyesuaikan properti nama lapangan hasil eager loading (booking.field.nama_lapangan) */}
                         <span className="text-[10px] text-slate-500 font-semibold truncate">• {booking.field?.nama_lapangan || 'Lapangan'}</span>
                       </div>
                       <div className="text-xs font-bold text-slate-200 mt-1">
-                        {/* PERBAIKAN: Menyelaraskan key penamaan variabel waktu jam_mulai & jam_selesai */}
                         {booking.tanggal} <span className="text-slate-500 font-normal ml-1">({booking.jam_mulai} - {booking.jam_selesai})</span>
                       </div>
                     </div>

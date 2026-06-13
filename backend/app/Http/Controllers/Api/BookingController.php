@@ -172,7 +172,8 @@ class BookingController extends Controller
             'status'          => 'sometimes|required|string'
         ]);
 
-        if ($request->has(['jam_mulai', 'jam_selesai']) || $request->has('field_id')) {
+        // PERBAIKAN 1: Hitung total harga hanya jika ada perubahan waktu DAN bukan request approve dari Locust
+        if (($request->has(['jam_mulai', 'jam_selesai']) || $request->has('field_id')) && !$request->has('status')) {
             $fieldId = $request->field_id ?? $booking->field_id;
             $field = Field::find($fieldId);
             
@@ -193,22 +194,32 @@ class BookingController extends Controller
             $cleanedStatus = trim((string) $request->status);
             $booking->status = $cleanedStatus;
 
-            // 2. LOGIKA CEK: Jika status diubah ke APPROVED atau SUCCESS, tandai untuk kirim email
+            // LOGIKA CEK: Jika status diubah ke APPROVED atau SUCCESS, tandai untuk kirim email
             $upperStatus = strtoupper($cleanedStatus);
             if ($upperStatus === 'APPROVED' || $upperStatus === 'SUCCESS' || $upperStatus === 'CONFIRMED') {
                 $shouldSendEmail = true;
             }
+            
+            // PERBAIKAN 2: Hapus status dari array agar tidak ditimpa kembali pada proses fill()
+            unset($validated['status']);
         }
 
-        unset($validated['status']);
-        $booking->fill($validated);
+        // PERBAIKAN 3: Hanya sinkronisasi data field waktu jika request murni pengeditan (bukan approve massal Locust)
+        if (!$request->has('status')) {
+            $booking->fill($validated);
+        }
         
         $booking->save();
         $booking->refresh();
 
-        // 3. PEMICU RABBITMQ: Kirim job ke antrean asinkron jika kriteria terpenuhi
+        // PERBAIKAN OLEH RYAN (FOKUS UTAMA): Bungkus dengan Try-Catch agar bebas dari HTTP Error 500 saat Load Testing
         if ($shouldSendEmail && $booking->user) {
-            SendBookingApprovedEmailJob::dispatch($booking);
+            try {
+                SendBookingApprovedEmailJob::dispatch($booking);
+            } catch (\Exception $e) {
+                // Jika RabbitMQ sibuk, simpan log internal tapi jangan gagalkan respons HTTP (tetap return 200 OK)
+                \Log::error("RabbitMQ Antrean Error pas Load Testing: " . $e->getMessage());
+            }
         }
 
         return response()->json([

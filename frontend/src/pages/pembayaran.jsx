@@ -15,7 +15,7 @@ const Pembayaran = () => {
 
   const API_BASE_URL = 'https://supreme-winner-v6p5v77jv9p5cw5qr-8000.app.github.dev/api'; // Sesuaikan dengan URL backend Anda
   
-  // PERBAIKAN: Menghitung total bayar secara dinamis berdasarkan harga asli tiap lapangan dari database
+  // Menghitung total bayar secara dinamis berdasarkan harga asli tiap lapangan dari database
   const totalBayar = bookingItems.reduce((sum, item) => sum + Number(item.harga || 0), 0);
 
   // Jika user iseng masuk ke /pembayaran tanpa memilih jadwal, kembalikan ke /jadwal
@@ -40,14 +40,14 @@ const Pembayaran = () => {
     try {
       setIsSubmitting(true);
 
-      // PERBAIKAN: Menyelaraskan payload dengan aturan array validasi 'items.*' di Laravel BookingController
+      // PAYLOAD FIXED: Menggunakan .slice(0, 5) untuk mengubah format "HH:MM:SS" menjadi "HH:MM" agar lolos aturan Laravel
       const payload = {
-        payment_method: paymentMethod, // Bisa kamu gunakan nanti jika tabel booking sudah punya kolom method
+        payment_method: paymentMethod, 
         items: bookingItems.map(item => ({
           field_id: item.field_id,
           tanggal: item.tanggal,
-          jam_mulai: item.jam_mulai,
-          jam_selesai: item.jam_selesai
+          jam_mulai: item.jam_mulai ? item.jam_mulai.slice(0, 5) : item.jam_mulai,
+          jam_selesai: item.jam_selesai ? item.jam_selesai.slice(0, 5) : item.jam_selesai
         }))
       };
 
@@ -67,7 +67,15 @@ const Pembayaran = () => {
         alert('Booking Berhasil! Menunggu verifikasi pembayaran sistem Ganesha Arena.');
         navigate('/dashboard'); // Kembali ke dashboard setelah sukses
       } else {
-        alert(`Gagal membuat pesanan: ${data.message || 'Terjadi kesalahan server.'}`);
+        console.error('--- DETAIL ERROR VALIDASI LARAVEL 422 ---');
+        console.error(data.errors || data);
+        console.error('-----------------------------------------');
+
+        const errorMessages = data.errors 
+          ? Object.values(data.errors).flat().join('\n') 
+          : data.message || 'Terjadi kesalahan server.';
+
+        alert(`Gagal membuat pesanan (422):\n${errorMessages}`);
       }
     } catch (error) {
       console.error('Error saat melakukan checkout:', error);
@@ -111,14 +119,12 @@ const Pembayaran = () => {
           {/* List Struk Item Map */}
           <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar divide-y divide-slate-800/40">
             {bookingItems.map((item, idx) => (
-              <div key={item.id} className={`flex justify-between items-center ${idx !== 0 ? 'pt-3' : ''}`}>
+              <div key={item.id || idx} className={`flex justify-between items-center ${idx !== 0 ? 'pt-3' : ''}`}>
                 <div>
-                  <h5 className="text-xs font-bold text-white uppercase tracking-wide">{item.lapangan}</h5>
-                  {/* PERBAIKAN: Menampilkan parameter jam_mulai dan jam_selesai yang dikirim dari keranjang */}
+                  <h5 className="text-xs font-bold text-white uppercase tracking-wide">{item.lapangan || 'Lapangan'}</h5>
                   <p className="text-[11px] text-slate-400 font-semibold mt-0.5">{item.jam_mulai} - {item.jam_selesai}</p>
                   <p className="text-[10px] text-slate-500 font-medium">Tanggal: {item.tanggal}</p>
                 </div>
-                {/* PERBAIKAN: Menampilkan harga asli per item sesuai data database */}
                 <span className="font-mono text-xs text-[#10b981] font-bold">Rp {Number(item.harga || 0).toLocaleString('id-ID')}</span>
               </div>
             ))}
